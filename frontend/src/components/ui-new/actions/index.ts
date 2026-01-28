@@ -1073,6 +1073,28 @@ export const Actions = {
       }
     },
   },
+
+  RunArchiveScript: {
+    id: 'run-archive-script',
+    label: 'Run Archive Script',
+    icon: TerminalIcon,
+    shortcut: 'R A',
+    requiresTarget: true,
+    isVisible: (ctx) => ctx.hasWorkspace,
+    isEnabled: (ctx) => !ctx.isAttemptRunning,
+    execute: async (_ctx, workspaceId) => {
+      const result = await attemptsApi.runArchiveScript(workspaceId);
+      if (!result.success) {
+        if (result.error?.type === 'no_script_configured') {
+          throw new Error('No archive script configured for this project');
+        }
+        if (result.error?.type === 'process_already_running') {
+          throw new Error('Cannot run script while another process is running');
+        }
+        throw new Error('Failed to run archive script');
+      }
+    },
+  },
 } as const satisfies Record<string, ActionDefinition>;
 
 // Helper to resolve dynamic label
