@@ -27,7 +27,7 @@ use services::services::{
     filesystem::{FilesystemError, FilesystemService},
     filesystem_watcher::FilesystemWatcherError,
     image::{ImageError, ImageService},
-    pr_monitor::PrMonitorService,
+    pr_monitor::{OnArchiveCallback, PrMonitorService},
     project::ProjectService,
     queued_message::QueuedMessageService,
     repo::RepoService,
@@ -120,6 +120,10 @@ pub trait Deployment: Clone + Send + Sync + 'static {
         Ok(())
     }
 
+    /// Returns a callback for triggering archive scripts when workspaces are archived.
+    /// This is used by the PR monitor service to run archive scripts when PRs are merged.
+    fn on_archive_callback(&self) -> Option<OnArchiveCallback>;
+
     async fn spawn_pr_monitor_service(&self) -> tokio::task::JoinHandle<()> {
         let db = self.db().clone();
         let analytics = self
@@ -129,7 +133,8 @@ pub trait Deployment: Clone + Send + Sync + 'static {
                 user_id: self.user_id().to_string(),
                 analytics_service: analytics_service.clone(),
             });
-        PrMonitorService::spawn(db, analytics).await
+        let on_archive = self.on_archive_callback();
+        PrMonitorService::spawn(db, analytics, on_archive).await
     }
 
     async fn track_if_analytics_allowed(&self, event_name: &str, properties: Value) {
