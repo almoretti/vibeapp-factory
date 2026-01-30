@@ -124,6 +124,7 @@ export const Pages: Record<StaticPageId, CommandBarPage> = {
         items: [
           { type: 'action', action: Actions.RunSetupScript },
           { type: 'action', action: Actions.RunCleanupScript },
+          { type: 'action', action: Actions.RunArchiveScript },
         ],
       },
     ],
