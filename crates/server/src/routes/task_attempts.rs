@@ -136,8 +136,6 @@ pub async fn update_workspace(
     Json(request): Json<UpdateWorkspace>,
 ) -> Result<ResponseJson<ApiResponse<Workspace>>, ApiError> {
     let pool = &deployment.db().pool;
-
-    // Check if we're archiving the workspace (transitioning from not archived to archived)
     let is_archiving = request.archived == Some(true) && !workspace.archived;
 
     Workspace::update(
@@ -151,20 +149,17 @@ pub async fn update_workspace(
     let updated = Workspace::find_by_id(pool, workspace.id)
         .await?
         .ok_or(WorkspaceError::TaskNotFound)?;
-
-    // Run archive script if we just archived the workspace
-    if is_archiving {
-        if let Err(e) = deployment
+    if is_archiving
+        && let Err(e) = deployment
             .container()
             .try_run_archive_script(workspace.id)
             .await
-        {
-            tracing::error!(
-                "Failed to run archive script for workspace {}: {}",
-                workspace.id,
-                e
-            );
-        }
+    {
+        tracing::error!(
+            "Failed to run archive script for workspace {}: {}",
+            workspace.id,
+            e
+        );
     }
 
     Ok(ResponseJson(ApiResponse::success(updated)))
@@ -512,7 +507,6 @@ pub async fn merge_task_attempt(
     Task::update_status(pool, task.id, TaskStatus::Done).await?;
     if !workspace.pinned {
         Workspace::set_archived(pool, workspace.id, true).await?;
-        // Run archive script after archiving
         if let Err(e) = deployment
             .container()
             .try_run_archive_script(workspace.id)
@@ -525,7 +519,6 @@ pub async fn merge_task_attempt(
             );
         }
     }
-
     // Stop any running dev servers for this workspace
     let dev_servers =
         ExecutionProcess::find_running_dev_servers_by_workspace(pool, workspace.id).await?;
@@ -1580,8 +1573,6 @@ pub async fn run_archive_script(
     State(deployment): State<DeploymentImpl>,
 ) -> Result<ResponseJson<ApiResponse<ExecutionProcess, RunScriptError>>, ApiError> {
     let pool = &deployment.db().pool;
-
-    // Check if any non-dev-server processes are already running for this workspace
     if ExecutionProcess::has_running_non_dev_server_processes_for_workspace(pool, workspace.id)
         .await?
     {
@@ -1614,8 +1605,6 @@ pub async fn run_archive_script(
             )));
         }
     };
-
-    // Get or create a session for archive script
     let session = match Session::find_latest_by_workspace_id(pool, workspace.id).await? {
         Some(s) => s,
         None => {
