@@ -1,6 +1,7 @@
 import { useCallback, useMemo } from 'react';
 import { useJsonPatchWsStream } from './useJsonPatchWsStream';
 import type { TaskStatus, TaskWithAttemptStatus } from 'shared/types';
+import { useProjectBranch } from '@/contexts/ProjectBranchContext';
 
 type TasksState = {
   tasks: Record<string, TaskWithAttemptStatus>;
@@ -19,9 +20,17 @@ export interface UseProjectTasksResult {
  * Stream tasks for a project via WebSocket (JSON Patch) and expose as array + map.
  * Server sends initial snapshot: replace /tasks with an object keyed by id.
  * Live updates arrive at /tasks/<id> via add/replace/remove operations.
+ * 
+ * @param projectId - The project to fetch tasks for
+ * @param branchOverride - Optional branch filter override. If not provided, uses context branch.
  */
-export const useProjectTasks = (projectId: string): UseProjectTasksResult => {
-  const endpoint = `/api/tasks/stream/ws?project_id=${encodeURIComponent(projectId)}`;
+export const useProjectTasks = (projectId: string, branchOverride?: string): UseProjectTasksResult => {
+  // Use branch from context if no override provided
+  const { currentBranch } = useProjectBranch();
+  const branch = branchOverride ?? currentBranch;
+  
+  const branchParam = branch ? `&branch=${encodeURIComponent(branch)}` : '';
+  const endpoint = `/api/tasks/stream/ws?project_id=${encodeURIComponent(projectId)}${branchParam}`;
 
   const initialData = useCallback((): TasksState => ({ tasks: {} }), []);
 

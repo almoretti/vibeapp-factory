@@ -70,6 +70,7 @@ export function NoServerContent({
         status: null,
         parent_workspace_id: null,
         image_ids: null,
+        branch: null, // Companion task goes to main
       },
       executor_profile_id: config.executor_profile,
       repos,

@@ -2,6 +2,7 @@ import { useMemo, useCallback, useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useDropzone } from 'react-dropzone';
 import { useCreateMode } from '@/contexts/CreateModeContext';
+import { useProjectBranch } from '@/contexts/ProjectBranchContext';
 import { useUserSystem } from '@/components/ConfigProvider';
 import { useCreateWorkspace } from '@/hooks/useCreateWorkspace';
 import { useCreateAttachments } from '@/hooks/useCreateAttachments';
@@ -14,6 +15,7 @@ import { SettingsDialog } from '../dialogs/SettingsDialog';
 export function CreateChatBoxContainer() {
   const { t } = useTranslation('common');
   const { profiles, config, updateAndSaveConfig } = useUserSystem();
+  const { currentBranch } = useProjectBranch();
   const {
     repos,
     targetBranches,
@@ -184,6 +186,7 @@ export function CreateChatBoxContainer() {
         status: null,
         parent_workspace_id: null,
         image_ids: getImageIds(),
+        branch: currentBranch, // Associate task with current branch
       },
       executor_profile_id: effectiveProfile,
       repos: repos.map((r) => ({

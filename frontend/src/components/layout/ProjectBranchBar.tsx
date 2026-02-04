@@ -1,6 +1,7 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useProjectBranch } from '@/contexts/ProjectBranchContext';
 import {
   GitBranch,
   Plus,
@@ -54,6 +55,7 @@ interface RepoBranchItemProps {
 function RepoBranchItem({ repo }: RepoBranchItemProps) {
   const { t } = useTranslation(['common', 'tasks']);
   const queryClient = useQueryClient();
+  const { setCurrentBranch } = useProjectBranch();
 
   const [branchFilter, setBranchFilter] = useState('');
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
@@ -66,6 +68,13 @@ function RepoBranchItem({ repo }: RepoBranchItemProps) {
     queryFn: () => repoApi.getGitStatus(repo.id),
     refetchInterval: 30000,
   });
+
+  // Update the project branch context when current branch changes
+  useEffect(() => {
+    if (gitStatus?.current_branch) {
+      setCurrentBranch(gitStatus.current_branch);
+    }
+  }, [gitStatus?.current_branch, setCurrentBranch]);
 
   // Fetch branches
   const { data: branches = [], isLoading: branchesLoading } = useQuery({

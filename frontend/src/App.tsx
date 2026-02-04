@@ -27,6 +27,7 @@ import { SearchProvider } from '@/contexts/SearchContext';
 import { HotkeysProvider } from 'react-hotkeys-hook';
 
 import { ProjectProvider } from '@/contexts/ProjectContext';
+import { ProjectBranchProvider } from '@/contexts/ProjectBranchContext';
 import { ThemeMode } from 'shared/types';
 import * as Sentry from '@sentry/react';
 
@@ -128,6 +129,7 @@ function AppContent() {
   return (
     <I18nextProvider i18n={i18n}>
       <ThemeProvider initialTheme={config?.theme || ThemeMode.SYSTEM}>
+        <ProjectBranchProvider>
         <SearchProvider>
           <SentryRoutes>
             {/* ========== LEGACY DESIGN ROUTES ========== */}
@@ -199,6 +201,7 @@ function AppContent() {
             </Route>
           </SentryRoutes>
         </SearchProvider>
+        </ProjectBranchProvider>
       </ThemeProvider>
     </I18nextProvider>
   );

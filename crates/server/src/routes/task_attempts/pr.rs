@@ -650,6 +650,7 @@ pub async fn create_workspace_from_pr(
         status: Some(TaskStatus::InProgress),
         parent_workspace_id: None,
         image_ids: None,
+        branch: Some(payload.head_branch.clone()), // PR tasks are associated with their head branch
     };
     let task = Task::create(pool, &create_task, task_id).await?;
 

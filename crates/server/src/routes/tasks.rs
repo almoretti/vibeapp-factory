@@ -37,15 +37,21 @@ use crate::{
 #[derive(Debug, Serialize, Deserialize)]
 pub struct TaskQuery {
     pub project_id: Uuid,
+    /// Optional branch filter. If provided, only tasks for that branch are returned.
+    /// "main" or "master" also includes tasks with NULL branch (legacy tasks).
+    pub branch: Option<String>,
 }
 
 pub async fn get_tasks(
     State(deployment): State<DeploymentImpl>,
     Query(query): Query<TaskQuery>,
 ) -> Result<ResponseJson<ApiResponse<Vec<TaskWithAttemptStatus>>>, ApiError> {
-    let tasks =
-        Task::find_by_project_id_with_attempt_status(&deployment.db().pool, query.project_id)
-            .await?;
+    let tasks = Task::find_by_project_id_and_branch_with_attempt_status(
+        &deployment.db().pool,
+        query.project_id,
+        query.branch.as_deref(),
+    )
+    .await?;
 
     Ok(ResponseJson(ApiResponse::success(tasks)))
 }
@@ -56,7 +62,7 @@ pub async fn stream_tasks_ws(
     Query(query): Query<TaskQuery>,
 ) -> impl IntoResponse {
     ws.on_upgrade(move |socket| async move {
-        if let Err(e) = handle_tasks_ws(socket, deployment, query.project_id).await {
+        if let Err(e) = handle_tasks_ws(socket, deployment, query.project_id, query.branch).await {
             tracing::warn!("tasks WS closed: {}", e);
         }
     })
@@ -66,6 +72,7 @@ async fn handle_tasks_ws(
     socket: WebSocket,
     deployment: DeploymentImpl,
     project_id: Uuid,
+    _branch: Option<String>, // TODO: Add branch filtering to stream_tasks_raw
 ) -> anyhow::Result<()> {
     // Get the raw stream and convert LogMsg to WebSocket messages
     let mut stream = deployment
@@ -268,6 +275,7 @@ pub async fn update_task(
     let parent_workspace_id = payload
         .parent_workspace_id
         .or(existing_task.parent_workspace_id);
+    let branch = payload.branch.or(existing_task.branch);
 
     let task = Task::update(
         &deployment.db().pool,
@@ -277,6 +285,7 @@ pub async fn update_task(
         description,
         status,
         parent_workspace_id,
+        branch,
     )
     .await?;
 
