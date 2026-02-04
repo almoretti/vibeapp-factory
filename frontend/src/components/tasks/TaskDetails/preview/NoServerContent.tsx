@@ -71,6 +71,7 @@ export function NoServerContent({
         parent_workspace_id: null,
         image_ids: null,
         branch: null, // Companion task goes to main
+        position: null, // Auto-assign position
       },
       executor_profile_id: config.executor_profile,
       repos,

@@ -40,8 +40,10 @@ import {
 } from '@/components/ui/tooltip';
 import { repoApi } from '@/lib/api';
 import { useProjectRepos } from '@/hooks/useProjectRepos';
+import { useProjectDevServerStatus } from '@/hooks/useProjectDevServerStatus';
 import type { Repo } from 'shared/types';
 import { cn } from '@/lib/utils';
+import { Square } from 'lucide-react';
 
 interface ProjectBranchBarProps {
   projectId: string;
@@ -107,6 +109,23 @@ function RepoBranchItem({ repo }: RepoBranchItemProps) {
   const deleteBranchMutation = useMutation({
     mutationFn: (branchName: string) => repoApi.deleteBranch(repo.id, branchName),
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['repo-branches', repo.id] });
+    },
+  });
+
+  // Push mutation
+  const pushMutation = useMutation({
+    mutationFn: () => repoApi.push(repo.id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['repo-git-status', repo.id] });
+    },
+  });
+
+  // Pull mutation
+  const pullMutation = useMutation({
+    mutationFn: () => repoApi.pull(repo.id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['repo-git-status', repo.id] });
       queryClient.invalidateQueries({ queryKey: ['repo-branches', repo.id] });
     },
   });
@@ -265,16 +284,38 @@ function RepoBranchItem({ repo }: RepoBranchItemProps) {
               </TooltipProvider>
             )}
             {gitStatus.has_remote && gitStatus.ahead > 0 && (
-              <span className="flex items-center gap-0.5 text-emerald-600">
-                <ArrowUp className="h-3 w-3" />
-                {gitStatus.ahead}
-              </span>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      onClick={() => pushMutation.mutate()}
+                      disabled={pushMutation.isPending}
+                      className="flex items-center gap-0.5 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-100 dark:hover:bg-emerald-900/30 px-1 py-0.5 rounded transition-colors"
+                    >
+                      <ArrowUp className="h-3 w-3" />
+                      {gitStatus.ahead}
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent>Push {gitStatus.ahead} commit{gitStatus.ahead > 1 ? 's' : ''}</TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
             )}
             {gitStatus.has_remote && gitStatus.behind > 0 && (
-              <span className="flex items-center gap-0.5 text-amber-600">
-                <ArrowDown className="h-3 w-3" />
-                {gitStatus.behind}
-              </span>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      onClick={() => pullMutation.mutate()}
+                      disabled={pullMutation.isPending}
+                      className="flex items-center gap-0.5 text-amber-600 hover:text-amber-700 hover:bg-amber-100 dark:hover:bg-amber-900/30 px-1 py-0.5 rounded transition-colors"
+                    >
+                      <ArrowDown className="h-3 w-3" />
+                      {gitStatus.behind}
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent>Pull {gitStatus.behind} commit{gitStatus.behind > 1 ? 's' : ''}</TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
             )}
           </div>
         )}
@@ -344,6 +385,7 @@ function RepoBranchItem({ repo }: RepoBranchItemProps) {
  */
 export function ProjectBranchBar({ projectId, className }: ProjectBranchBarProps) {
   const { data: repos = [], isLoading } = useProjectRepos(projectId);
+  const { hasRunningDevServer, runningDevServers } = useProjectDevServerStatus(projectId);
 
   if (isLoading || repos.length === 0) {
     return null;
@@ -360,6 +402,42 @@ export function ProjectBranchBar({ projectId, className }: ProjectBranchBarProps
       {repos.map((repo) => (
         <RepoBranchItem key={repo.id} repo={repo} />
       ))}
+      
+      {/* Dev Server Status Indicator */}
+      <div className="ml-auto shrink-0">
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <div className={cn(
+                'flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium',
+                hasRunningDevServer 
+                  ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' 
+                  : 'bg-muted text-muted-foreground'
+              )}>
+                {hasRunningDevServer ? (
+                  <>
+                    <span className="relative flex h-2 w-2">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                    </span>
+                    <span>Dev Server</span>
+                  </>
+                ) : (
+                  <>
+                    <Square className="h-3 w-3" />
+                    <span>Dev Server</span>
+                  </>
+                )}
+              </div>
+            </TooltipTrigger>
+            <TooltipContent>
+              {hasRunningDevServer 
+                ? `${runningDevServers.length} dev server${runningDevServers.length > 1 ? 's' : ''} running`
+                : 'No dev server running'}
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      </div>
     </div>
   );
 }

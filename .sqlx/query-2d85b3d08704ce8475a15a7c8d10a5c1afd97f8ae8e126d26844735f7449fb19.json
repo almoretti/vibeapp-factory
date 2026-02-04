@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT 1 AS v FROM tags WHERE \"project_id\" = $1",
+  "describe": {
+    "columns": [
+      {
+        "name": "v",
+        "ordinal": 0,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "2d85b3d08704ce8475a15a7c8d10a5c1afd97f8ae8e126d26844735f7449fb19"
+}

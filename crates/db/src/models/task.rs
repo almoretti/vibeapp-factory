@@ -31,6 +31,7 @@ pub struct Task {
     pub status: TaskStatus,
     pub parent_workspace_id: Option<Uuid>, // Foreign key to parent Workspace
     pub branch: Option<String>, // Git branch this task belongs to (None = main/default)
+    pub position: i64, // Sort order within status column (lower = higher priority)
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -74,6 +75,7 @@ pub struct CreateTask {
     pub parent_workspace_id: Option<Uuid>,
     pub image_ids: Option<Vec<Uuid>>,
     pub branch: Option<String>, // Git branch to associate this task with
+    pub position: Option<i64>, // Sort position (if not provided, will be set to max+1)
 }
 
 impl CreateTask {
@@ -90,6 +92,7 @@ impl CreateTask {
             parent_workspace_id: None,
             image_ids: None,
             branch: None,
+            position: None,
         }
     }
 }
@@ -102,6 +105,7 @@ pub struct UpdateTask {
     pub parent_workspace_id: Option<Uuid>,
     pub image_ids: Option<Vec<Uuid>>,
     pub branch: Option<String>,
+    pub position: Option<i64>,
 }
 
 impl Task {
@@ -130,6 +134,7 @@ impl Task {
   t.status                        AS "status!: TaskStatus",
   t.parent_workspace_id           AS "parent_workspace_id: Uuid",
   t.branch,
+  t.position                      AS "position!: i64",
   t.created_at                    AS "created_at!: DateTime<Utc>",
   t.updated_at                    AS "updated_at!: DateTime<Utc>",
 
@@ -166,7 +171,7 @@ impl Task {
 
 FROM tasks t
 WHERE t.project_id = $1
-ORDER BY t.created_at DESC"#,
+ORDER BY t.position ASC, t.created_at DESC"#,
             project_id
         )
         .fetch_all(pool)
@@ -183,6 +188,7 @@ ORDER BY t.created_at DESC"#,
                     status: rec.status,
                     parent_workspace_id: rec.parent_workspace_id,
                     branch: rec.branch,
+                    position: rec.position,
                     created_at: rec.created_at,
                     updated_at: rec.updated_at,
                 },
@@ -198,7 +204,7 @@ ORDER BY t.created_at DESC"#,
     pub async fn find_by_id(pool: &SqlitePool, id: Uuid) -> Result<Option<Self>, sqlx::Error> {
         sqlx::query_as!(
             Task,
-            r#"SELECT id as "id!: Uuid", project_id as "project_id!: Uuid", title, description, status as "status!: TaskStatus", parent_workspace_id as "parent_workspace_id: Uuid", branch, created_at as "created_at!: DateTime<Utc>", updated_at as "updated_at!: DateTime<Utc>"
+            r#"SELECT id as "id!: Uuid", project_id as "project_id!: Uuid", title, description, status as "status!: TaskStatus", parent_workspace_id as "parent_workspace_id: Uuid", branch, position as "position!: i64", created_at as "created_at!: DateTime<Utc>", updated_at as "updated_at!: DateTime<Utc>"
                FROM tasks
                WHERE id = $1"#,
             id
@@ -210,7 +216,7 @@ ORDER BY t.created_at DESC"#,
     pub async fn find_by_rowid(pool: &SqlitePool, rowid: i64) -> Result<Option<Self>, sqlx::Error> {
         sqlx::query_as!(
             Task,
-            r#"SELECT id as "id!: Uuid", project_id as "project_id!: Uuid", title, description, status as "status!: TaskStatus", parent_workspace_id as "parent_workspace_id: Uuid", branch, created_at as "created_at!: DateTime<Utc>", updated_at as "updated_at!: DateTime<Utc>"
+            r#"SELECT id as "id!: Uuid", project_id as "project_id!: Uuid", title, description, status as "status!: TaskStatus", parent_workspace_id as "parent_workspace_id: Uuid", branch, position as "position!: i64", created_at as "created_at!: DateTime<Utc>", updated_at as "updated_at!: DateTime<Utc>"
                FROM tasks
                WHERE rowid = $1"#,
             rowid
@@ -225,18 +231,33 @@ ORDER BY t.created_at DESC"#,
         task_id: Uuid,
     ) -> Result<Self, sqlx::Error> {
         let status = data.status.clone().unwrap_or_default();
+        // If no position provided, get max position + 1 for this project/status
+        let position = match data.position {
+            Some(pos) => pos,
+            None => {
+                let max: Option<i64> = sqlx::query_scalar!(
+                    r#"SELECT MAX(position) as "max_pos: i64" FROM tasks WHERE project_id = $1 AND status = $2"#,
+                    data.project_id,
+                    status
+                )
+                .fetch_one(pool)
+                .await?;
+                max.unwrap_or(0) + 1
+            }
+        };
         sqlx::query_as!(
             Task,
-            r#"INSERT INTO tasks (id, project_id, title, description, status, parent_workspace_id, branch)
-               VALUES ($1, $2, $3, $4, $5, $6, $7)
-               RETURNING id as "id!: Uuid", project_id as "project_id!: Uuid", title, description, status as "status!: TaskStatus", parent_workspace_id as "parent_workspace_id: Uuid", branch, created_at as "created_at!: DateTime<Utc>", updated_at as "updated_at!: DateTime<Utc>""#,
+            r#"INSERT INTO tasks (id, project_id, title, description, status, parent_workspace_id, branch, position)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+               RETURNING id as "id!: Uuid", project_id as "project_id!: Uuid", title, description, status as "status!: TaskStatus", parent_workspace_id as "parent_workspace_id: Uuid", branch, position as "position!: i64", created_at as "created_at!: DateTime<Utc>", updated_at as "updated_at!: DateTime<Utc>""#,
             task_id,
             data.project_id,
             data.title,
             data.description,
             status,
             data.parent_workspace_id,
-            data.branch
+            data.branch,
+            position
         )
         .fetch_one(pool)
         .await
@@ -257,7 +278,7 @@ ORDER BY t.created_at DESC"#,
             r#"UPDATE tasks
                SET title = $3, description = $4, status = $5, parent_workspace_id = $6, branch = $7
                WHERE id = $1 AND project_id = $2
-               RETURNING id as "id!: Uuid", project_id as "project_id!: Uuid", title, description, status as "status!: TaskStatus", parent_workspace_id as "parent_workspace_id: Uuid", branch, created_at as "created_at!: DateTime<Utc>", updated_at as "updated_at!: DateTime<Utc>""#,
+               RETURNING id as "id!: Uuid", project_id as "project_id!: Uuid", title, description, status as "status!: TaskStatus", parent_workspace_id as "parent_workspace_id: Uuid", branch, position as "position!: i64", created_at as "created_at!: DateTime<Utc>", updated_at as "updated_at!: DateTime<Utc>""#,
             id,
             project_id,
             title,
@@ -265,6 +286,25 @@ ORDER BY t.created_at DESC"#,
             status,
             parent_workspace_id,
             branch
+        )
+        .fetch_one(pool)
+        .await
+    }
+
+    /// Update task position for drag-and-drop reordering
+    pub async fn update_position(
+        pool: &SqlitePool,
+        id: Uuid,
+        new_position: i64,
+    ) -> Result<Self, sqlx::Error> {
+        sqlx::query_as!(
+            Task,
+            r#"UPDATE tasks
+               SET position = $2, updated_at = datetime('now')
+               WHERE id = $1
+               RETURNING id as "id!: Uuid", project_id as "project_id!: Uuid", title, description, status as "status!: TaskStatus", parent_workspace_id as "parent_workspace_id: Uuid", branch, position as "position!: i64", created_at as "created_at!: DateTime<Utc>", updated_at as "updated_at!: DateTime<Utc>""#,
+            id,
+            new_position
         )
         .fetch_one(pool)
         .await
@@ -336,10 +376,10 @@ ORDER BY t.created_at DESC"#,
         // Find only child tasks that have this workspace as their parent
         sqlx::query_as!(
             Task,
-            r#"SELECT id as "id!: Uuid", project_id as "project_id!: Uuid", title, description, status as "status!: TaskStatus", parent_workspace_id as "parent_workspace_id: Uuid", branch, created_at as "created_at!: DateTime<Utc>", updated_at as "updated_at!: DateTime<Utc>"
+            r#"SELECT id as "id!: Uuid", project_id as "project_id!: Uuid", title, description, status as "status!: TaskStatus", parent_workspace_id as "parent_workspace_id: Uuid", branch, position as "position!: i64", created_at as "created_at!: DateTime<Utc>", updated_at as "updated_at!: DateTime<Utc>"
                FROM tasks
                WHERE parent_workspace_id = $1
-               ORDER BY created_at DESC"#,
+               ORDER BY position ASC, created_at DESC"#,
             workspace_id,
         )
         .fetch_all(pool)
@@ -363,6 +403,7 @@ ORDER BY t.created_at DESC"#,
   t.status                        AS "status!: TaskStatus",
   t.parent_workspace_id           AS "parent_workspace_id: Uuid",
   t.branch,
+  t.position                      AS "position!: i64",
   t.created_at                    AS "created_at!: DateTime<Utc>",
   t.updated_at                    AS "updated_at!: DateTime<Utc>",
 
@@ -400,7 +441,7 @@ ORDER BY t.created_at DESC"#,
 FROM tasks t
 WHERE t.project_id = $1
   AND ($2 IS NULL OR t.branch = $2 OR (t.branch IS NULL AND ($2 = 'main' OR $2 = 'master')))
-ORDER BY t.created_at DESC"#,
+ORDER BY t.position ASC, t.created_at DESC"#,
             project_id,
             branch
         )
@@ -418,6 +459,7 @@ ORDER BY t.created_at DESC"#,
                     status: rec.status,
                     parent_workspace_id: rec.parent_workspace_id,
                     branch: rec.branch,
+                    position: rec.position,
                     created_at: rec.created_at,
                     updated_at: rec.updated_at,
                 },

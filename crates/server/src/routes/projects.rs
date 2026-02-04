@@ -13,6 +13,7 @@ use axum::{
     routing::{get, post},
 };
 use db::models::{
+    execution_process::ExecutionProcess,
     project::{CreateProject, Project, ProjectError, SearchResult, UpdateProject},
     project_repo::{CreateProjectRepo, ProjectRepo},
     repo::Repo,
@@ -285,6 +286,19 @@ pub async fn search_project_files(
     }
 }
 
+/// Get running dev servers for a project
+pub async fn get_dev_server_status(
+    Extension(project): Extension<Project>,
+    State(deployment): State<DeploymentImpl>,
+) -> Result<ResponseJson<ApiResponse<Vec<ExecutionProcess>>>, ApiError> {
+    let dev_servers = ExecutionProcess::find_running_dev_servers_by_project(
+        &deployment.db().pool,
+        project.id,
+    )
+    .await?;
+    Ok(ResponseJson(ApiResponse::success(dev_servers)))
+}
+
 pub async fn get_project_repositories(
     Extension(project): Extension<Project>,
     State(deployment): State<DeploymentImpl>,
@@ -440,6 +454,7 @@ pub fn router(deployment: &DeploymentImpl) -> Router<DeploymentImpl> {
             get(get_project).put(update_project).delete(delete_project),
         )
         .route("/search", get(search_project_files))
+        .route("/dev-server-status", get(get_dev_server_status))
         .route("/open-editor", post(open_project_in_editor))
         .route(
             "/repositories",

@@ -330,6 +330,13 @@ export const projectsApi = {
     );
     return handleApiResponse<void>(response);
   },
+
+  getDevServerStatus: async (projectId: string): Promise<ExecutionProcess[]> => {
+    const response = await makeRequest(
+      `/api/projects/${projectId}/dev-server-status`
+    );
+    return handleApiResponse<ExecutionProcess[]>(response);
+  },
 };
 
 // Task Management APIs
@@ -370,6 +377,14 @@ export const tasksApi = {
       method: 'DELETE',
     });
     return handleApiResponse<void>(response);
+  },
+
+  reorder: async (taskId: string, position: number): Promise<Task> => {
+    const response = await makeRequest(`/api/tasks/${taskId}/reorder`, {
+      method: 'PUT',
+      body: JSON.stringify({ position }),
+    });
+    return handleApiResponse<Task>(response);
   },
 };
 

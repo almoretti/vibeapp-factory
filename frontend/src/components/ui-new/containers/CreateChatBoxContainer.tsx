@@ -187,6 +187,7 @@ export function CreateChatBoxContainer() {
         parent_workspace_id: null,
         image_ids: getImageIds(),
         branch: currentBranch, // Associate task with current branch
+        position: null, // Auto-assign position
       },
       executor_profile_id: effectiveProfile,
       repos: repos.map((r) => ({

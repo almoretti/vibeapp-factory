@@ -56,18 +56,23 @@ export const useProjectTasks = (projectId: string, branchOverride?: string): Use
       byStatus[task.status]?.push(task);
     });
 
+    // Sort by position first (ascending), then by created_at (descending) as tiebreaker
     const sorted = Object.values(merged).sort(
-      (a, b) =>
-        new Date(b.created_at as string).getTime() -
-        new Date(a.created_at as string).getTime()
+      (a, b) => {
+        const posA = a.position ?? 0;
+        const posB = b.position ?? 0;
+        if (posA !== posB) return posA - posB;
+        return new Date(b.created_at as string).getTime() - new Date(a.created_at as string).getTime();
+      }
     );
 
     (Object.values(byStatus) as TaskWithAttemptStatus[][]).forEach((list) => {
-      list.sort(
-        (a, b) =>
-          new Date(b.created_at as string).getTime() -
-          new Date(a.created_at as string).getTime()
-      );
+      list.sort((a, b) => {
+        const posA = a.position ?? 0;
+        const posB = b.position ?? 0;
+        if (posA !== posB) return posA - posB;
+        return new Date(b.created_at as string).getTime() - new Date(a.created_at as string).getTime();
+      });
     });
 
     return { tasks: sorted, tasksById: merged, tasksByStatus: byStatus };

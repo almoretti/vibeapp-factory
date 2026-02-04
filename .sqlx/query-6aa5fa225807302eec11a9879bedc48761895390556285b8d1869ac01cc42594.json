@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT 1 AS v FROM tags WHERE id = $1",
+  "describe": {
+    "columns": [
+      {
+        "name": "v",
+        "ordinal": 0,
+        "type_info": "Null"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "6aa5fa225807302eec11a9879bedc48761895390556285b8d1869ac01cc42594"
+}

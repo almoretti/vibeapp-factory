@@ -404,10 +404,27 @@ pub async fn delete_task(
     Ok((StatusCode::ACCEPTED, ResponseJson(ApiResponse::success(()))))
 }
 
+#[derive(Debug, Deserialize)]
+pub struct ReorderTaskRequest {
+    pub position: i64,
+}
+
+/// Update task position for drag-and-drop reordering
+pub async fn reorder_task(
+    Extension(task): Extension<Task>,
+    State(deployment): State<DeploymentImpl>,
+    Json(payload): Json<ReorderTaskRequest>,
+) -> Result<ResponseJson<ApiResponse<Task>>, ApiError> {
+    let pool = &deployment.db().pool;
+    let updated_task = Task::update_position(pool, task.id, payload.position).await?;
+    Ok(ResponseJson(ApiResponse::success(updated_task)))
+}
+
 pub fn router(deployment: &DeploymentImpl) -> Router<DeploymentImpl> {
     let task_actions_router = Router::new()
         .route("/", put(update_task))
-        .route("/", delete(delete_task));
+        .route("/", delete(delete_task))
+        .route("/reorder", put(reorder_task));
 
     let task_id_router = Router::new()
         .route("/", get(get_task))
