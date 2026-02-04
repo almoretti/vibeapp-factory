@@ -4,7 +4,6 @@ import {
   DataWithScrollModifier,
   ScrollModifier,
   VirtuosoMessageList,
-  VirtuosoMessageListLicense,
   VirtuosoMessageListMethods,
   VirtuosoMessageListProps,
 } from '@virtuoso.dev/message-list';
@@ -163,9 +162,6 @@ export function VirtualizedProcessLogs({
 
   return (
     <div className="h-full">
-      <VirtuosoMessageListLicense
-        licenseKey={import.meta.env.VITE_PUBLIC_REACT_VIRTUOSO_LICENSE_KEY}
-      >
         <VirtuosoMessageList<LogEntryWithKey, SearchContext>
           ref={messageListRef}
           className="h-full"
@@ -175,7 +171,6 @@ export function VirtualizedProcessLogs({
           computeItemKey={computeItemKey}
           ItemContent={ItemContent}
         />
-      </VirtuosoMessageListLicense>
     </div>
   );
 }

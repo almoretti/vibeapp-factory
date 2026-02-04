@@ -386,6 +386,15 @@ export type SendMessageShortcut = "ModifierEnter" | "Enter";
 
 export type GitBranch = { name: string, is_current: boolean, is_remote: boolean, last_commit_date: Date, };
 
+export type RepoGitStatus = {
+  current_branch: string,
+  is_clean: boolean,
+  ahead: number,
+  behind: number,
+  has_remote: boolean,
+  last_commit_message: string | null,
+};
+
 export type QueuedMessage = { 
 /**
  * The session this message is queued for

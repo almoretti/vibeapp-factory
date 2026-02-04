@@ -32,6 +32,8 @@ serde_with = "3"
 async-trait = "0.1"
 
 [profile.release]
-debug = 1
-split-debuginfo = "packed"
+debug = 0
 strip = true
+lto = false
+codegen-units = 16
+opt-level = 2

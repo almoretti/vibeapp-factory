@@ -2,7 +2,6 @@ import {
   DataWithScrollModifier,
   ScrollModifier,
   VirtuosoMessageList,
-  VirtuosoMessageListLicense,
   VirtuosoMessageListMethods,
   VirtuosoMessageListProps,
 } from '@virtuoso.dev/message-list';
@@ -263,9 +262,6 @@ export const ConversationList = forwardRef<
           hasContent ? 'opacity-100' : 'opacity-0'
         )}
       >
-        <VirtuosoMessageListLicense
-          licenseKey={import.meta.env.VITE_PUBLIC_REACT_VIRTUOSO_LICENSE_KEY}
-        >
           <VirtuosoMessageList<DisplayEntry, MessageListContext>
             ref={messageListRef}
             className="h-full scrollbar-none"
@@ -277,7 +273,6 @@ export const ConversationList = forwardRef<
             Header={() => <div className="h-2" />}
             Footer={() => <div className="h-2" />}
           />
-        </VirtuosoMessageListLicense>
       </div>
     </ApprovalFormProvider>
   );

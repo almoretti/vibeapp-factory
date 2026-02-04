@@ -1,9 +1,9 @@
 use axum::{
-    Router,
+    Json, Router,
     extract::{Path, Query, State},
     http::StatusCode,
     response::Json as ResponseJson,
-    routing::{get, post},
+    routing::{delete, get, post},
 };
 use db::models::{
     project::SearchResult,
@@ -15,6 +15,7 @@ use serde::{Deserialize, Serialize};
 use services::services::{
     file_search::SearchQuery,
     git_host::{GitHostError, GitHostProvider, GitHostService, OpenPrInfo, ProviderKind},
+    repo::RepoError,
 };
 use ts_rs::TS;
 use utils::response::ApiResponse;
@@ -286,15 +287,213 @@ pub async fn list_open_prs(
     }
 }
 
+/// Git status response for a repo
+#[derive(Debug, Serialize, TS)]
+#[ts(export)]
+pub struct RepoGitStatus {
+    pub current_branch: String,
+    pub is_clean: bool,
+    pub ahead: u32,
+    pub behind: u32,
+    pub has_remote: bool,
+    pub last_commit_message: Option<String>,
+}
+
+/// Get git status for a repo (branch, ahead/behind, dirty status)
+pub async fn get_repo_git_status(
+    Path(repo_id): Path<Uuid>,
+    State(deployment): State<DeploymentImpl>,
+) -> Result<ResponseJson<ApiResponse<RepoGitStatus>>, ApiError> {
+    let repo = Repo::find_by_id(&deployment.db().pool, repo_id)
+        .await?
+        .ok_or(RepoError::NotFound)?;
+
+    let git = deployment.git();
+    let repo_path = std::path::Path::new(&repo.path);
+
+    // Get current branch
+    let current_branch = git.get_current_branch(repo_path)
+        .unwrap_or_else(|_| "unknown".to_string());
+
+    // Check if clean
+    let is_clean = git.is_worktree_clean(repo_path).unwrap_or(false);
+
+    // Get ahead/behind (if remote tracking exists)
+    let (ahead, behind, has_remote) = match git.get_remote_branch_status(repo_path, &current_branch, None) {
+        Ok((ahead, behind)) => (ahead as u32, behind as u32, true),
+        Err(_) => (0, 0, false),
+    };
+
+    // Get last commit message
+    let last_commit_message = git.get_commit_subject(repo_path, "HEAD").ok();
+
+    Ok(ResponseJson(ApiResponse::success(RepoGitStatus {
+        current_branch,
+        is_clean,
+        ahead,
+        behind,
+        has_remote,
+        last_commit_message,
+    })))
+}
+
+/// Push current branch to remote
+pub async fn push_repo(
+    Path(repo_id): Path<Uuid>,
+    State(deployment): State<DeploymentImpl>,
+) -> Result<ResponseJson<ApiResponse<String>>, ApiError> {
+    let repo = Repo::find_by_id(&deployment.db().pool, repo_id)
+        .await?
+        .ok_or(RepoError::NotFound)?;
+
+    let git = deployment.git();
+    let repo_path = std::path::Path::new(&repo.path);
+
+    // Get current branch
+    let branch = git.get_current_branch(repo_path)
+        .map_err(|e| ApiError::BadRequest(format!("Failed to get current branch: {}", e)))?;
+
+    // Get remote
+    let remotes = git.list_remotes(repo_path)?;
+    let remote = remotes.first()
+        .ok_or_else(|| ApiError::BadRequest("No remote configured".to_string()))?;
+
+    // Push
+    git.push_to_remote(repo_path, &branch, false)
+        .map_err(|e| ApiError::BadRequest(format!("Push failed: {}", e)))?;
+
+    Ok(ResponseJson(ApiResponse::success(format!("Pushed {} to {}", branch, remote.name))))
+}
+
+/// Pull from remote
+pub async fn pull_repo(
+    Path(repo_id): Path<Uuid>,
+    State(deployment): State<DeploymentImpl>,
+) -> Result<ResponseJson<ApiResponse<String>>, ApiError> {
+    let repo = Repo::find_by_id(&deployment.db().pool, repo_id)
+        .await?
+        .ok_or(RepoError::NotFound)?;
+
+    let git = deployment.git();
+    let repo_path = std::path::Path::new(&repo.path);
+
+    // Get current branch
+    let branch = git.get_current_branch(repo_path)
+        .map_err(|e| ApiError::BadRequest(format!("Failed to get current branch: {}", e)))?;
+
+    // Get remote
+    let remotes = git.list_remotes(repo_path)?;
+    let remote = remotes.first()
+        .ok_or_else(|| ApiError::BadRequest("No remote configured".to_string()))?;
+
+    // Fetch and merge (pull)
+    git.fetch_branch(repo_path, &remote.name, &branch)
+        .map_err(|e| ApiError::BadRequest(format!("Fetch failed: {}", e)))?;
+
+    Ok(ResponseJson(ApiResponse::success(format!("Pulled {} from {}", branch, remote.name))))
+}
+
+#[derive(Debug, Deserialize)]
+pub struct CheckoutRequest {
+    pub branch: String,
+}
+
+/// Checkout (switch to) a branch
+pub async fn checkout_branch(
+    Path(repo_id): Path<Uuid>,
+    State(deployment): State<DeploymentImpl>,
+    Json(req): Json<CheckoutRequest>,
+) -> Result<ResponseJson<ApiResponse<String>>, ApiError> {
+    let repo = Repo::find_by_id(&deployment.db().pool, repo_id)
+        .await?
+        .ok_or(RepoError::NotFound)?;
+
+    let git = deployment.git();
+    let repo_path = std::path::Path::new(&repo.path);
+
+    // Check if worktree is clean before switching
+    let is_clean = git.is_worktree_clean(repo_path).unwrap_or(false);
+    if !is_clean {
+        return Err(ApiError::BadRequest(
+            "Cannot switch branches: working directory has uncommitted changes".to_string()
+        ));
+    }
+
+    git.checkout_branch(repo_path, &req.branch)
+        .map_err(|e| ApiError::BadRequest(format!("Checkout failed: {}", e)))?;
+
+    Ok(ResponseJson(ApiResponse::success(format!("Switched to branch '{}'", req.branch))))
+}
+
+#[derive(Debug, Deserialize)]
+pub struct CreateBranchRequest {
+    pub name: String,
+    #[serde(default)]
+    pub checkout: bool,
+}
+
+/// Create a new branch
+pub async fn create_branch(
+    Path(repo_id): Path<Uuid>,
+    State(deployment): State<DeploymentImpl>,
+    Json(req): Json<CreateBranchRequest>,
+) -> Result<ResponseJson<ApiResponse<String>>, ApiError> {
+    let repo = Repo::find_by_id(&deployment.db().pool, repo_id)
+        .await?
+        .ok_or(RepoError::NotFound)?;
+
+    let git = deployment.git();
+    let repo_path = std::path::Path::new(&repo.path);
+
+    if req.checkout {
+        git.create_and_checkout_branch(repo_path, &req.name)
+            .map_err(|e| ApiError::BadRequest(format!("Failed to create branch: {}", e)))?;
+        Ok(ResponseJson(ApiResponse::success(format!("Created and switched to branch '{}'", req.name))))
+    } else {
+        git.create_branch(repo_path, &req.name)
+            .map_err(|e| ApiError::BadRequest(format!("Failed to create branch: {}", e)))?;
+        Ok(ResponseJson(ApiResponse::success(format!("Created branch '{}'", req.name))))
+    }
+}
+
+#[derive(Debug, Deserialize)]
+pub struct DeleteBranchParams {
+    pub repo_id: Uuid,
+    pub branch_name: String,
+}
+
+/// Delete a local branch
+pub async fn delete_branch(
+    Path(params): Path<DeleteBranchParams>,
+    State(deployment): State<DeploymentImpl>,
+) -> Result<ResponseJson<ApiResponse<String>>, ApiError> {
+    let repo = Repo::find_by_id(&deployment.db().pool, params.repo_id)
+        .await?
+        .ok_or(RepoError::NotFound)?;
+
+    let git = deployment.git();
+    let repo_path = std::path::Path::new(&repo.path);
+
+    git.delete_branch(repo_path, &params.branch_name, false)
+        .map_err(|e| ApiError::BadRequest(format!("Failed to delete branch: {}", e)))?;
+
+    Ok(ResponseJson(ApiResponse::success(format!("Deleted branch '{}'", params.branch_name))))
+}
+
 pub fn router() -> Router<DeploymentImpl> {
     Router::new()
         .route("/repos", get(get_repos).post(register_repo))
         .route("/repos/init", post(init_repo))
         .route("/repos/batch", post(get_repos_batch))
         .route("/repos/{repo_id}", get(get_repo).put(update_repo))
-        .route("/repos/{repo_id}/branches", get(get_repo_branches))
+        .route("/repos/{repo_id}/branches", get(get_repo_branches).post(create_branch))
+        .route("/repos/{repo_id}/branches/{branch_name}", delete(delete_branch))
+        .route("/repos/{repo_id}/checkout", post(checkout_branch))
         .route("/repos/{repo_id}/remotes", get(get_repo_remotes))
         .route("/repos/{repo_id}/prs", get(list_open_prs))
         .route("/repos/{repo_id}/search", get(search_repo))
         .route("/repos/{repo_id}/open-editor", post(open_repo_in_editor))
+        .route("/repos/{repo_id}/git-status", get(get_repo_git_status))
+        .route("/repos/{repo_id}/push", post(push_repo))
+        .route("/repos/{repo_id}/pull", post(pull_repo))
 }

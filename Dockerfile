@@ -10,7 +10,7 @@ RUN apk add --no-cache \
     clang-dev
 
 # Allow linking libclang on musl
-ENV RUSTFLAGS="-C target-feature=-crt-static"
+ENV RUSTFLAGS="-C target-feature=-crt-static -C codegen-units=16 -C lto=off"
 
 # Install Rust
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
@@ -21,6 +21,9 @@ ARG POSTHOG_API_ENDPOINT
 
 ENV VITE_PUBLIC_POSTHOG_KEY=$POSTHOG_API_KEY
 ENV VITE_PUBLIC_POSTHOG_HOST=$POSTHOG_API_ENDPOINT
+
+# Limit memory usage during build
+ENV CARGO_BUILD_JOBS=1
 
 # Set working directory
 WORKDIR /app

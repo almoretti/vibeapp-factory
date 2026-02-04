@@ -1322,6 +1322,55 @@ impl GitService {
         Ok(branches)
     }
 
+    /// Checkout (switch to) an existing branch
+    pub fn checkout_branch(&self, repo_path: &Path, branch_name: &str) -> Result<(), GitServiceError> {
+        let git = GitCli::new();
+        git.git(repo_path, ["checkout", branch_name])
+            .map_err(|e| GitServiceError::InvalidRepository(format!("Failed to checkout branch '{}': {}", branch_name, e)))?;
+        Ok(())
+    }
+
+    /// Create a new branch from the current HEAD
+    pub fn create_branch(&self, repo_path: &Path, branch_name: &str) -> Result<(), GitServiceError> {
+        let repo = Repository::open(repo_path)?;
+        let head = repo.head()?;
+        let commit = head.peel_to_commit()?;
+        repo.branch(branch_name, &commit, false)?;
+        Ok(())
+    }
+
+    /// Create and checkout a new branch from current HEAD
+    pub fn create_and_checkout_branch(&self, repo_path: &Path, branch_name: &str) -> Result<(), GitServiceError> {
+        let git = GitCli::new();
+        git.git(repo_path, ["checkout", "-b", branch_name])
+            .map_err(|e| GitServiceError::InvalidRepository(format!("Failed to create branch '{}': {}", branch_name, e)))?;
+        Ok(())
+    }
+
+    /// Delete a local branch (refuses to delete current branch or protected branches)
+    pub fn delete_branch(&self, repo_path: &Path, branch_name: &str, _force: bool) -> Result<(), GitServiceError> {
+        // Refuse to delete protected branches
+        let protected = ["main", "master", "develop", "dev"];
+        if protected.contains(&branch_name) {
+            return Err(GitServiceError::InvalidRepository(
+                format!("Cannot delete protected branch '{}'", branch_name)
+            ));
+        }
+
+        // Check if it's the current branch
+        let current = self.get_current_branch(repo_path)?;
+        if current == branch_name {
+            return Err(GitServiceError::InvalidRepository(
+                "Cannot delete the currently checked out branch".to_string()
+            ));
+        }
+
+        let repo = Repository::open(repo_path)?;
+        let mut branch = repo.find_branch(branch_name, BranchType::Local)?;
+        branch.delete()?;
+        Ok(())
+    }
+
     /// Perform a squash merge of task branch into base branch, but fail on conflicts
     fn perform_squash_merge(
         &self,

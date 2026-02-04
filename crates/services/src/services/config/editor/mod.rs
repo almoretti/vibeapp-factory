@@ -37,6 +37,9 @@ pub struct EditorConfig {
     remote_ssh_host: Option<String>,
     #[serde(default)]
     remote_ssh_user: Option<String>,
+    /// Base URL for code-server (e.g., "https://code.moretti.cc")
+    #[serde(default)]
+    code_server_url: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS, EnumString, EnumIter)]
@@ -52,6 +55,7 @@ pub enum EditorType {
     Zed,
     Xcode,
     GoogleAntigravity,
+    CodeServer,
     Custom,
 }
 
@@ -62,6 +66,7 @@ impl Default for EditorConfig {
             custom_command: None,
             remote_ssh_host: None,
             remote_ssh_user: None,
+            code_server_url: None,
         }
     }
 }
@@ -79,6 +84,7 @@ impl EditorConfig {
             custom_command,
             remote_ssh_host,
             remote_ssh_user,
+            code_server_url: None,
         }
     }
 
@@ -95,6 +101,11 @@ impl EditorConfig {
             EditorType::Custom => {
                 // Custom editor - use user-provided command or fallback to VSCode
                 self.custom_command.as_deref().unwrap_or("code")
+            }
+            EditorType::CodeServer => {
+                // CodeServer is web-based - open_file() uses remote_url() instead.
+                // This fallback is only reached if code_server_url is not configured.
+                "code"
             }
         };
         CommandBuilder::new(base_command)
@@ -141,13 +152,23 @@ impl EditorConfig {
     }
 
     fn remote_url(&self, path: &Path) -> Option<String> {
+        let path_str = path.to_string_lossy();
+
+        // Handle code-server (web-based VS Code)
+        if matches!(self.editor_type, EditorType::CodeServer) {
+            let base_url = self.code_server_url.as_ref()?;
+            // URL encode the path for the folder parameter
+            let encoded_path = urlencoding::encode(&path_str);
+            return Some(format!("{base_url}/?folder={encoded_path}"));
+        }
+
+        // Handle SSH remote editors
         let remote_host = self.remote_ssh_host.as_ref()?;
         let user_part = self
             .remote_ssh_user
             .as_ref()
             .map(|u| format!("{u}@"))
             .unwrap_or_default();
-        let path_str = path.to_string_lossy();
 
         let scheme = match self.editor_type {
             EditorType::VsCode => "vscode",
@@ -190,6 +211,7 @@ impl EditorConfig {
                 custom_command: self.custom_command.clone(),
                 remote_ssh_host: self.remote_ssh_host.clone(),
                 remote_ssh_user: self.remote_ssh_user.clone(),
+                code_server_url: self.code_server_url.clone(),
             }
         } else {
             self.clone()

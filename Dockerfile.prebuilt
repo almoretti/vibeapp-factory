@@ -1,0 +1,43 @@
+# Runtime-only container using pre-built binary
+FROM debian:bookworm-slim
+
+# Install runtime dependencies
+RUN apt-get update && apt-get install -y \
+    ca-certificates \
+    wget \
+    tini \
+    libssl3 \
+    libz1 \
+    libzstd1 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create app user for security
+RUN groupadd -g 1001 appgroup && \
+    useradd -u 1001 -g appgroup -m -s /bin/bash appuser
+
+# Copy pre-built binary from host
+COPY server /usr/local/bin/server
+RUN chmod +x /usr/local/bin/server
+
+# Create repos directory and set permissions
+RUN mkdir -p /repos && \
+    chown -R appuser:appgroup /repos
+
+# Switch to non-root user
+USER appuser
+
+# Set runtime environment
+ENV HOST=0.0.0.0
+ENV PORT=3000
+EXPOSE 3000
+
+# Set working directory
+WORKDIR /repos
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+    CMD wget --quiet --tries=1 --spider "http://${HOST:-localhost}:${PORT:-3000}" || exit 1
+
+# Run the application
+ENTRYPOINT ["/usr/bin/tini", "--"]
+CMD ["server"]

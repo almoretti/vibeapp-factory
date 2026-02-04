@@ -2,7 +2,6 @@ import {
   DataWithScrollModifier,
   ScrollModifier,
   VirtuosoMessageList,
-  VirtuosoMessageListLicense,
   VirtuosoMessageListMethods,
   VirtuosoMessageListProps,
 } from '@virtuoso.dev/message-list';
@@ -117,9 +116,6 @@ const VirtualizedList = ({ attempt, task }: VirtualizedListProps) => {
 
   return (
     <ApprovalFormProvider>
-      <VirtuosoMessageListLicense
-        licenseKey={import.meta.env.VITE_PUBLIC_REACT_VIRTUOSO_LICENSE_KEY}
-      >
         <VirtuosoMessageList<PatchTypeWithKey, MessageListContext>
           ref={messageListRef}
           className="flex-1"
@@ -131,7 +127,6 @@ const VirtualizedList = ({ attempt, task }: VirtualizedListProps) => {
           Header={() => <div className="h-2"></div>}
           Footer={() => <div className="h-2"></div>}
         />
-      </VirtuosoMessageListLicense>
       {loading && (
         <div className="float-left top-0 left-0 w-full h-full bg-primary flex flex-col gap-2 justify-center items-center">
           <Loader2 className="h-8 w-8 animate-spin" />

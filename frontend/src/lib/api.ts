@@ -16,6 +16,7 @@ import {
   ExecutionProcess,
   ExecutionProcessRepoState,
   GitBranch,
+  RepoGitStatus,
   Project,
   Repo,
   RepoWithTargetBranch,
@@ -885,6 +886,55 @@ export const repoApi = {
   listRemotes: async (repoId: string): Promise<GitRemote[]> => {
     const response = await makeRequest(`/api/repos/${repoId}/remotes`);
     return handleApiResponse<GitRemote[]>(response);
+  },
+
+  // Git branch management
+  checkoutBranch: async (repoId: string, branch: string): Promise<string> => {
+    const response = await makeRequest(`/api/repos/${repoId}/checkout`, {
+      method: 'POST',
+      body: JSON.stringify({ branch }),
+    });
+    return handleApiResponse<string>(response);
+  },
+
+  createBranch: async (
+    repoId: string,
+    name: string,
+    checkout: boolean = false
+  ): Promise<string> => {
+    const response = await makeRequest(`/api/repos/${repoId}/branches`, {
+      method: 'POST',
+      body: JSON.stringify({ name, checkout }),
+    });
+    return handleApiResponse<string>(response);
+  },
+
+  deleteBranch: async (repoId: string, branchName: string): Promise<string> => {
+    const response = await makeRequest(
+      `/api/repos/${repoId}/branches/${encodeURIComponent(branchName)}`,
+      { method: 'DELETE' }
+    );
+    return handleApiResponse<string>(response);
+  },
+
+  // Git status and sync
+  getGitStatus: async (repoId: string): Promise<RepoGitStatus> => {
+    const response = await makeRequest(`/api/repos/${repoId}/git-status`);
+    return handleApiResponse<RepoGitStatus>(response);
+  },
+
+  push: async (repoId: string): Promise<string> => {
+    const response = await makeRequest(`/api/repos/${repoId}/push`, {
+      method: 'POST',
+    });
+    return handleApiResponse<string>(response);
+  },
+
+  pull: async (repoId: string): Promise<string> => {
+    const response = await makeRequest(`/api/repos/${repoId}/pull`, {
+      method: 'POST',
+    });
+    return handleApiResponse<string>(response);
   },
 };
 

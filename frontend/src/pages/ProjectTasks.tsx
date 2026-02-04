@@ -51,6 +51,7 @@ import { useProjectTasks } from '@/hooks/useProjectTasks';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { useHotkeysContext } from 'react-hotkeys-hook';
 import { TasksLayout, type LayoutMode } from '@/components/layout/TasksLayout';
+import { ProjectBranchBar } from '@/components/layout/ProjectBranchBar';
 import { PreviewPanel } from '@/components/panels/PreviewPanel';
 import { DiffsPanel } from '@/components/panels/DiffsPanel';
 import TaskAttemptPanel from '@/components/panels/TaskAttemptPanel';
@@ -774,15 +775,19 @@ export function ProjectTasks() {
         </Card>
       </div>
     ) : (
-      <div className="w-full h-full overflow-x-auto overflow-y-auto overscroll-x-contain">
-        <TaskKanbanBoard
-          columns={kanbanColumns}
-          onDragEnd={handleDragEnd}
-          onViewTaskDetails={handleViewTaskDetails}
-          selectedTaskId={selectedTask?.id}
-          onCreateTask={handleCreateNewTask}
-          projectId={projectId!}
-        />
+      <div className="w-full h-full flex flex-col">
+        {/* Branch bar for repo management */}
+        {projectId && <ProjectBranchBar projectId={projectId} />}
+        <div className="flex-1 overflow-x-auto overflow-y-auto overscroll-x-contain">
+          <TaskKanbanBoard
+            columns={kanbanColumns}
+            onDragEnd={handleDragEnd}
+            onViewTaskDetails={handleViewTaskDetails}
+            selectedTaskId={selectedTask?.id}
+            onCreateTask={handleCreateNewTask}
+            projectId={projectId!}
+          />
+        </div>
       </div>
     );
 

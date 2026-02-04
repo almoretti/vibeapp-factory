@@ -46,7 +46,7 @@ use git::{ConflictOp, GitCliError, GitServiceError};
 use git2::BranchType;
 use serde::{Deserialize, Serialize};
 use services::services::{
-    container::ContainerService, file_search::SearchQuery, workspace_manager::WorkspaceManager,
+    container::ContainerService, dev_server, file_search::SearchQuery, workspace_manager::WorkspaceManager,
 };
 use sqlx::Error as SqlxError;
 use ts_rs::TS;
@@ -1265,14 +1265,20 @@ pub async fn start_dev_server(
     }
 
     let repos = WorkspaceRepo::find_repos_for_workspace(pool, workspace.id).await?;
-    let repos_with_dev_script: Vec<_> = repos
+    
+    // Build list of repos with their dev commands (configured or auto-detected)
+    let repos_with_commands: Vec<(&Repo, String)> = repos
         .iter()
-        .filter(|r| r.dev_server_script.as_ref().is_some_and(|s| !s.is_empty()))
+        .filter_map(|r| {
+            let repo_path = Path::new(&r.path);
+            dev_server::get_dev_command(repo_path, r.dev_server_script.as_deref())
+                .map(|cmd| (r, cmd))
+        })
         .collect();
 
-    if repos_with_dev_script.is_empty() {
+    if repos_with_commands.is_empty() {
         return Ok(ResponseJson(ApiResponse::error(
-            "No dev server script configured for any repository in this workspace",
+            "No dev server script configured and could not auto-detect package manager for any repository",
         )));
     }
 
@@ -1292,10 +1298,16 @@ pub async fn start_dev_server(
     };
 
     let mut execution_processes = Vec::new();
-    for repo in repos_with_dev_script {
+    for (repo, dev_command) in repos_with_commands {
+        // Find an available port for this dev server
+        let port = dev_server::find_available_port().unwrap_or(3001);
+        
+        // Build the command with PORT env var
+        let script = format!("PORT={} {}", port, dev_command);
+        
         let executor_action = ExecutorAction::new(
             ExecutorActionType::ScriptRequest(ScriptRequest {
-                script: repo.dev_server_script.clone().unwrap(),
+                script,
                 language: ScriptRequestLanguage::Bash,
                 context: ScriptContext::DevServer,
                 working_dir: Some(repo.name.clone()),
