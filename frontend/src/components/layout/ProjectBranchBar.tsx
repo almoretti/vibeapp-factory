@@ -18,6 +18,8 @@ import {
   Loader2,
   CheckCircle,
   XCircle,
+  Filter,
+  X,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -44,6 +46,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { repoApi } from '@/lib/api';
+import { useProject } from '@/contexts/ProjectContext';
 import { useProjectRepos } from '@/hooks/useProjectRepos';
 import { useProjectDevServerStatus } from '@/hooks/useProjectDevServerStatus';
 import { useProjectDeployments } from '@/hooks/useDeployments';
@@ -551,6 +554,8 @@ function DeploymentStatusIndicator({ projectId }: { projectId: string }) {
 export function ProjectBranchBar({ projectId, className }: ProjectBranchBarProps) {
   const { data: repos = [], isLoading } = useProjectRepos(projectId);
   const { hasRunningDevServer } = useProjectDevServerStatus(projectId);
+  const { currentBranch, setCurrentBranch } = useProjectBranch();
+  const { project } = useProject();
 
   if (isLoading || repos.length === 0) {
     return null;
@@ -567,12 +572,43 @@ export function ProjectBranchBar({ projectId, className }: ProjectBranchBarProps
       {repos.map((repo) => (
         <RepoBranchItem key={repo.id} repo={repo} />
       ))}
-      
+
+      {/* Branch filter indicator */}
+      {currentBranch ? (
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                onClick={() => setCurrentBranch(null)}
+                className="flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-primary/10 text-primary border border-primary/20 hover:bg-primary/20 transition-colors"
+              >
+                <Filter className="h-3 w-3" />
+                <span className="font-mono truncate max-w-[120px]">{currentBranch}</span>
+                <X className="h-3 w-3 opacity-60" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>Tasks filtered to branch "{currentBranch}". Click to show all.</TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      ) : (
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <div className="flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-muted text-muted-foreground">
+                <Filter className="h-3 w-3" />
+                <span>All branches</span>
+              </div>
+            </TooltipTrigger>
+            <TooltipContent>Showing tasks from all branches</TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      )}
+
       {/* Actions (right side) */}
       <div className="ml-auto shrink-0 flex items-center gap-2">
         {/* Deploy Button */}
         {repos.length > 0 && (
-          <DeployButton projectId={projectId} repos={repos} />
+          <DeployButton projectId={projectId} repos={repos} projectName={project?.name} />
         )}
 
         {/* Deployment Status Indicator */}

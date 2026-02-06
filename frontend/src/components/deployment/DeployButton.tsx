@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -38,6 +38,7 @@ import {
   List,
   CheckCircle,
   Loader2,
+  Globe,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -45,12 +46,13 @@ interface DeployButtonProps {
   projectId: string;
   repos: Repo[];
   className?: string;
+  projectName?: string;
 }
 
 /**
  * Deploy button with dropdown for triggering deployments and viewing deployment history.
  */
-export function DeployButton({ projectId, repos, className }: DeployButtonProps) {
+export function DeployButton({ projectId, repos, className, projectName }: DeployButtonProps) {
   const [deployDialogOpen, setDeployDialogOpen] = useState(false);
   const [deploymentsDialogOpen, setDeploymentsDialogOpen] = useState(false);
   const [selectedRepo, setSelectedRepo] = useState<Repo | null>(
@@ -71,6 +73,14 @@ export function DeployButton({ projectId, repos, className }: DeployButtonProps)
   const activeDeployment = deployments.find(
     (d) => d.status === 'running' || d.status === 'building'
   );
+
+  // Compute subdomain preview matching backend logic: "{project}-{branch}" sanitized
+  const subdomainPreview = useMemo(() => {
+    if (!projectName || !gitStatus?.current_branch) return null;
+    return `${projectName}-${gitStatus.current_branch}`
+      .replace(/[^a-zA-Z0-9-]/g, '-')
+      .toLowerCase();
+  }, [projectName, gitStatus?.current_branch]);
 
   const handleDeploy = useCallback(async () => {
     if (!selectedRepo || !gitStatus) return;
@@ -226,6 +236,22 @@ export function DeployButton({ projectId, repos, className }: DeployButtonProps)
                 Specify which ports your application listens on
               </p>
             </div>
+
+            {/* Subdomain preview */}
+            {subdomainPreview && (
+              <div className="space-y-2">
+                <Label>Deployment subdomain</Label>
+                <div className="flex items-center gap-2 px-3 py-2 bg-secondary rounded-md">
+                  <Globe className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
+                  <span className="text-sm font-mono text-muted-foreground">
+                    {subdomainPreview}
+                  </span>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  App name derived from project and branch
+                </p>
+              </div>
+            )}
 
             {/* Active deployment warning */}
             {activeDeployment && (

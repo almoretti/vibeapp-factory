@@ -18,14 +18,21 @@ use super::{
 };
 
 impl EventService {
-    /// Stream raw task messages for a specific project with initial snapshot
+    /// Stream raw task messages for a specific project with initial snapshot.
+    /// If `branch` is provided, only tasks matching that branch are included.
     pub async fn stream_tasks_raw(
         &self,
         project_id: Uuid,
+        branch: Option<String>,
     ) -> Result<futures::stream::BoxStream<'static, Result<LogMsg, std::io::Error>>, EventError>
     {
-        // Get initial snapshot of tasks
-        let tasks = Task::find_by_project_id_with_attempt_status(&self.db.pool, project_id).await?;
+        // Get initial snapshot of tasks (branch-filtered)
+        let tasks = Task::find_by_project_id_and_branch_with_attempt_status(
+            &self.db.pool,
+            project_id,
+            branch.as_deref(),
+        )
+        .await?;
 
         // Convert task array to object keyed by task ID
         let tasks_map: serde_json::Map<String, serde_json::Value> = tasks
@@ -44,15 +51,29 @@ impl EventService {
 
         // Clone necessary data for the async filter
         let db_pool = self.db.pool.clone();
+        let branch_filter = branch;
+
+        // Helper: check if a task matches the branch filter
+        let task_matches_branch = move |task_branch: &Option<String>, filter: &Option<String>| -> bool {
+            match filter {
+                None => true, // No filter = show all tasks
+                Some(fb) => match task_branch {
+                    Some(tb) => tb == fb,
+                    None => fb == "main" || fb == "master", // Legacy tasks belong to main/master
+                },
+            }
+        };
 
         // Get filtered event stream
         let filtered_stream =
             BroadcastStream::new(self.msg_store.get_receiver()).filter_map(move |msg_result| {
                 let db_pool = db_pool.clone();
+                let branch_filter = branch_filter.clone();
+                let task_matches_branch = task_matches_branch.clone();
                 async move {
                     match msg_result {
                         Ok(LogMsg::JsonPatch(patch)) => {
-                            // Filter events based on project_id
+                            // Filter events based on project_id and branch
                             if let Some(patch_op) = patch.0.first() {
                                 // Check if this is a direct task patch (new format)
                                 if patch_op.path().starts_with("/tasks/") {
@@ -64,6 +85,7 @@ impl EventService {
                                                     op.value.clone(),
                                                 )
                                                 && task.project_id == project_id
+                                                && task_matches_branch(&task.branch, &branch_filter)
                                             {
                                                 return Some(Ok(LogMsg::JsonPatch(patch)));
                                             }
@@ -75,6 +97,7 @@ impl EventService {
                                                     op.value.clone(),
                                                 )
                                                 && task.project_id == project_id
+                                                && task_matches_branch(&task.branch, &branch_filter)
                                             {
                                                 return Some(Ok(LogMsg::JsonPatch(patch)));
                                             }

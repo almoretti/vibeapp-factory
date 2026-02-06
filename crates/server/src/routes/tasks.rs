@@ -72,12 +72,12 @@ async fn handle_tasks_ws(
     socket: WebSocket,
     deployment: DeploymentImpl,
     project_id: Uuid,
-    _branch: Option<String>, // TODO: Add branch filtering to stream_tasks_raw
+    branch: Option<String>,
 ) -> anyhow::Result<()> {
     // Get the raw stream and convert LogMsg to WebSocket messages
     let mut stream = deployment
         .events()
-        .stream_tasks_raw(project_id)
+        .stream_tasks_raw(project_id, branch)
         .await?
         .map_ok(|msg| msg.to_ws_message_unchecked());
 
