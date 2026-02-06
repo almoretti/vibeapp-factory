@@ -1,10 +1,11 @@
 use anyhow::{self, Error as AnyhowError};
 use deployment::{Deployment, DeploymentError};
-use server::{DeploymentImpl, routes};
+use server::{DeploymentImpl, routes, services::deployment_poller::DeploymentPoller};
 use services::services::container::ContainerService;
 use sqlx::Error as SqlxError;
 use strip_ansi_escapes::strip;
 use thiserror::Error;
+use tokio_util::sync::CancellationToken;
 use tracing_subscriber::{EnvFilter, prelude::*};
 use utils::{
     assets::asset_dir,
@@ -68,6 +69,11 @@ async fn main() -> Result<(), VibeKanbanError> {
         .await
         .map_err(DeploymentError::from)?;
     deployment.spawn_pr_monitor_service().await;
+
+    // Start deployment status poller with cancellation support
+    let cancel_token = CancellationToken::new();
+    let _deployment_poller_handle = DeploymentPoller::spawn(deployment.db().pool.clone(), cancel_token.clone());
+
     deployment
         .track_if_analytics_allowed("session_start", serde_json::json!({}))
         .await;
@@ -126,6 +132,9 @@ async fn main() -> Result<(), VibeKanbanError> {
     axum::serve(listener, app_router)
         .with_graceful_shutdown(shutdown_signal())
         .await?;
+
+    // Cancel background services
+    cancel_token.cancel();
 
     perform_cleanup_actions(&deployment).await;
 

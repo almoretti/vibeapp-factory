@@ -9,8 +9,8 @@ utils = { path = "../utils" }
 git = { path = "../git" }
 services = { path = "../services" }
 executors = { path = "../executors" }
-async-trait = { workspace = true } 
-thiserror = { workspace = true } 
+async-trait = { workspace = true }
+thiserror = { workspace = true }
 anyhow = { workspace = true }
 tokio = { workspace = true }
 sqlx = "0.8.6"
@@ -19,4 +19,11 @@ tracing = { workspace = true }
 git2 = { workspace = true }
 futures = "0.3.31"
 axum = { workspace = true }
+reqwest = { workspace = true }
+serde = { workspace = true }
+url = "2.5"
+
+[dev-dependencies]
+wiremock = "0.6"
+tokio-test = "0.4"
 

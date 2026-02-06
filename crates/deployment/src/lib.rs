@@ -1,3 +1,5 @@
+pub mod coolify_client;
+
 use std::sync::Arc;
 
 use anyhow::Error as AnyhowError;

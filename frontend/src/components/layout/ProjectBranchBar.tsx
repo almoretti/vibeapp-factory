@@ -41,9 +41,9 @@ import {
 import { repoApi } from '@/lib/api';
 import { useProjectRepos } from '@/hooks/useProjectRepos';
 import { useProjectDevServerStatus } from '@/hooks/useProjectDevServerStatus';
+import { DeployButton } from '@/components/deployment';
 import type { Repo } from 'shared/types';
 import { cn } from '@/lib/utils';
-import { Square } from 'lucide-react';
 
 interface ProjectBranchBarProps {
   projectId: string;
@@ -385,7 +385,7 @@ function RepoBranchItem({ repo }: RepoBranchItemProps) {
  */
 export function ProjectBranchBar({ projectId, className }: ProjectBranchBarProps) {
   const { data: repos = [], isLoading } = useProjectRepos(projectId);
-  const { hasRunningDevServer, runningDevServers } = useProjectDevServerStatus(projectId);
+  const { hasRunningDevServer } = useProjectDevServerStatus(projectId);
 
   if (isLoading || repos.length === 0) {
     return null;
@@ -394,7 +394,7 @@ export function ProjectBranchBar({ projectId, className }: ProjectBranchBarProps
   return (
     <div
       className={cn(
-        'flex items-center gap-3 px-4 py-2 border-b border-border bg-background/50 backdrop-blur-sm overflow-x-auto',
+        'w-full flex items-center gap-3 px-4 py-2 border-b border-border bg-background/50 backdrop-blur-sm overflow-x-auto',
         className
       )}
     >
@@ -403,15 +403,21 @@ export function ProjectBranchBar({ projectId, className }: ProjectBranchBarProps
         <RepoBranchItem key={repo.id} repo={repo} />
       ))}
       
-      {/* Dev Server Status Indicator */}
-      <div className="ml-auto shrink-0">
+      {/* Actions (right side) */}
+      <div className="ml-auto shrink-0 flex items-center gap-2">
+        {/* Deploy Button */}
+        {repos.length > 0 && (
+          <DeployButton projectId={projectId} repos={repos} />
+        )}
+
+        {/* Dev Server Status Indicator */}
         <TooltipProvider>
           <Tooltip>
             <TooltipTrigger asChild>
               <div className={cn(
                 'flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium',
-                hasRunningDevServer 
-                  ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' 
+                hasRunningDevServer
+                  ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
                   : 'bg-muted text-muted-foreground'
               )}>
                 {hasRunningDevServer ? (
@@ -424,15 +430,15 @@ export function ProjectBranchBar({ projectId, className }: ProjectBranchBarProps
                   </>
                 ) : (
                   <>
-                    <Square className="h-3 w-3" />
+                    <span className="h-2 w-2 rounded-full bg-muted-foreground/50"></span>
                     <span>Dev Server</span>
                   </>
                 )}
               </div>
             </TooltipTrigger>
             <TooltipContent>
-              {hasRunningDevServer 
-                ? `${runningDevServers.length} dev server${runningDevServers.length > 1 ? 's' : ''} running`
+              {hasRunningDevServer
+                ? 'Dev server running'
                 : 'No dev server running'}
             </TooltipContent>
           </Tooltip>

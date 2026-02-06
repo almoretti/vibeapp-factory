@@ -1373,6 +1373,49 @@ export const scratchApi = {
     `/api/scratch/${scratchType}/${id}/stream/ws`,
 };
 
+// Deployments API
+import type {
+  Deployment,
+  CreateDeploymentRequest,
+  DeploymentLogsResponse,
+} from '@/types/deployment';
+
+export const deploymentsApi = {
+  /** Create/trigger a new deployment for a project */
+  create: async (
+    projectId: string,
+    data: CreateDeploymentRequest
+  ): Promise<Deployment> => {
+    const response = await makeRequest(`/api/projects/${projectId}/deploy`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+    return handleApiResponse<Deployment>(response);
+  },
+
+  /** List all deployments for a project */
+  listByProject: async (projectId: string): Promise<Deployment[]> => {
+    const response = await makeRequest(
+      `/api/projects/${projectId}/deployments`
+    );
+    return handleApiResponse<Deployment[]>(response);
+  },
+
+  /** Get deployment details by ID */
+  getById: async (deploymentId: string): Promise<Deployment> => {
+    const response = await makeRequest(`/api/deployments/${deploymentId}`);
+    return handleApiResponse<Deployment>(response);
+  },
+
+  /** Get deployment build logs */
+  getLogs: async (deploymentId: string): Promise<DeploymentLogsResponse> => {
+    const response = await makeRequest(
+      `/api/deployments/${deploymentId}/logs`
+    );
+    return handleApiResponse<DeploymentLogsResponse>(response);
+  },
+};
+
 // Agents API
 export const agentsApi = {
   getSlashCommandsStreamUrl: (

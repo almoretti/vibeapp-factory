@@ -9,7 +9,7 @@ use db::models::{
     project_repo::ProjectRepoError, repo::RepoError, scratch::ScratchError, session::SessionError,
     workspace::WorkspaceError,
 };
-use deployment::{DeploymentError, RemoteClientNotConfigured};
+use deployment::{DeploymentError, RemoteClientNotConfigured, coolify_client::CoolifyError};
 use executors::{command::CommandBuildError, executors::ExecutorError};
 use git::GitServiceError;
 use git2::Error as Git2Error;
@@ -80,6 +80,8 @@ pub enum ApiError {
     CommandBuilder(#[from] CommandBuildError),
     #[error(transparent)]
     Pty(#[from] PtyError),
+    #[error(transparent)]
+    Coolify(#[from] CoolifyError),
 }
 
 impl From<&'static str> for ApiError {
@@ -185,6 +187,18 @@ impl IntoResponse for ApiError {
                 PtyError::SessionClosed => (StatusCode::GONE, "PtyError"),
                 _ => (StatusCode::INTERNAL_SERVER_ERROR, "PtyError"),
             },
+            ApiError::Coolify(err) => match err {
+                CoolifyError::Auth => (StatusCode::UNAUTHORIZED, "CoolifyError"),
+                CoolifyError::NotFound(_) => (StatusCode::NOT_FOUND, "CoolifyError"),
+                CoolifyError::MissingEnv(_) => (StatusCode::SERVICE_UNAVAILABLE, "CoolifyError"),
+                CoolifyError::Timeout => (StatusCode::GATEWAY_TIMEOUT, "CoolifyError"),
+                CoolifyError::Transport(_) => (StatusCode::BAD_GATEWAY, "CoolifyError"),
+                CoolifyError::Http { status, .. } => (
+                    StatusCode::from_u16(*status).unwrap_or(StatusCode::BAD_GATEWAY),
+                    "CoolifyError",
+                ),
+                _ => (StatusCode::INTERNAL_SERVER_ERROR, "CoolifyError"),
+            },
         };
 
         let error_message = match &self {
@@ -263,6 +277,16 @@ impl IntoResponse for ApiError {
             ApiError::BadRequest(msg) => msg.clone(),
             ApiError::Conflict(msg) => msg.clone(),
             ApiError::Forbidden(msg) => msg.clone(),
+            ApiError::Coolify(err) => match err {
+                CoolifyError::Auth => "Coolify authentication failed. Check COOLIFY_API_TOKEN.".to_string(),
+                CoolifyError::NotFound(msg) => format!("Coolify resource not found: {}", msg),
+                CoolifyError::MissingEnv(var) => format!("Coolify not configured: missing {}", var),
+                CoolifyError::Timeout => "Coolify request timed out. Please try again.".to_string(),
+                CoolifyError::Transport(msg) => format!("Coolify connection error: {}", msg),
+                CoolifyError::Http { status, body } => format!("Coolify error ({}): {}", status, body),
+                CoolifyError::Serde(msg) => format!("Invalid Coolify response: {}", msg),
+                CoolifyError::Url(msg) => format!("Invalid Coolify URL: {}", msg),
+            },
             _ => format!("{}: {}", error_type, self),
         };
         let response = ApiResponse::<()>::error(&error_message);

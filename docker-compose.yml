@@ -46,6 +46,30 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
+  dev-server-proxy:
+    image: nginx:alpine
+    container_name: dev-server-proxy
+    restart: unless-stopped
+    volumes:
+      - ./dev-server-nginx.conf:/etc/nginx/nginx.conf:ro
+    labels:
+      - "traefik.enable=true"
+      # Wildcard route for dev-{port}.vibeapp-factory.moretti.cc
+      - "traefik.http.routers.dev-server.rule=HostRegexp(`{subdomain:dev-[0-9]+}.vibeapp-factory.moretti.cc`)"
+      - "traefik.http.routers.dev-server.entrypoints=https"
+      - "traefik.http.routers.dev-server.tls=true"
+      - "traefik.http.routers.dev-server.tls.certresolver=letsencrypt"
+      - "traefik.http.services.dev-server.loadbalancer.server.port=80"
+      # HTTP redirect
+      - "traefik.http.routers.dev-server-http.rule=HostRegexp(`{subdomain:dev-[0-9]+}.vibeapp-factory.moretti.cc`)"
+      - "traefik.http.routers.dev-server-http.entrypoints=http"
+      - "traefik.http.routers.dev-server-http.middlewares=dev-server-https-redirect"
+      - "traefik.http.middlewares.dev-server-https-redirect.redirectscheme.scheme=https"
+    networks:
+      - coolify
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
 networks:
   coolify:
     external: true
