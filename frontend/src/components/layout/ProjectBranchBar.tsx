@@ -13,6 +13,11 @@ import {
   Check,
   Search,
   ChevronDown,
+  ExternalLink,
+  Clock,
+  Loader2,
+  CheckCircle,
+  XCircle,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -41,7 +46,9 @@ import {
 import { repoApi } from '@/lib/api';
 import { useProjectRepos } from '@/hooks/useProjectRepos';
 import { useProjectDevServerStatus } from '@/hooks/useProjectDevServerStatus';
+import { useProjectDeployments } from '@/hooks/useDeployments';
 import { DeployButton } from '@/components/deployment';
+import type { DeploymentStatus } from '@/types/deployment';
 import type { Repo } from 'shared/types';
 import { cn } from '@/lib/utils';
 
@@ -415,6 +422,128 @@ function RepoBranchItem({ repo }: RepoBranchItemProps) {
   );
 }
 
+function getDeploymentStatusConfig(status: DeploymentStatus) {
+  switch (status) {
+    case 'pending':
+      return {
+        label: 'Pending',
+        icon: Clock,
+        dotColor: 'bg-gray-400',
+        bgColor: 'bg-gray-500/10 text-gray-600 dark:text-gray-400',
+        ping: false,
+      };
+    case 'building':
+      return {
+        label: 'Building',
+        icon: Loader2,
+        dotColor: 'bg-amber-500',
+        bgColor: 'bg-amber-500/10 text-amber-600 dark:text-amber-400',
+        ping: true,
+      };
+    case 'running':
+      return {
+        label: 'Running',
+        icon: CheckCircle,
+        dotColor: 'bg-emerald-500',
+        bgColor: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
+        ping: true,
+      };
+    case 'failed':
+      return {
+        label: 'Failed',
+        icon: XCircle,
+        dotColor: 'bg-red-500',
+        bgColor: 'bg-red-500/10 text-red-600 dark:text-red-400',
+        ping: false,
+      };
+  }
+}
+
+function DeploymentStatusIndicator({ projectId }: { projectId: string }) {
+  const { deployments } = useProjectDeployments(projectId);
+
+  // Find the most relevant deployment (building > running > pending > failed)
+  const activeDeployment =
+    deployments.find((d) => d.status === 'building') ??
+    deployments.find((d) => d.status === 'running') ??
+    deployments.find((d) => d.status === 'pending') ??
+    deployments.find((d) => d.status === 'failed');
+
+  if (!activeDeployment) return null;
+
+  const config = getDeploymentStatusConfig(activeDeployment.status);
+  const deployUrl = activeDeployment.domain
+    ? `https://${activeDeployment.domain}`
+    : null;
+
+  const indicator = (
+    <div
+      className={cn(
+        'flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium',
+        config.bgColor
+      )}
+    >
+      <span className="relative flex h-2 w-2">
+        {config.ping && (
+          <span
+            className={cn(
+              'animate-ping absolute inline-flex h-full w-full rounded-full opacity-75',
+              config.dotColor
+            )}
+          />
+        )}
+        <span
+          className={cn(
+            'relative inline-flex rounded-full h-2 w-2',
+            config.dotColor
+          )}
+        />
+      </span>
+      <span>Deploy: {config.label}</span>
+      {activeDeployment.status === 'running' && deployUrl && (
+        <ExternalLink className="h-3 w-3" />
+      )}
+    </div>
+  );
+
+  if (activeDeployment.status === 'running' && deployUrl) {
+    return (
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <a
+              href={deployUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="no-underline"
+            >
+              {indicator}
+            </a>
+          </TooltipTrigger>
+          <TooltipContent>{activeDeployment.domain}</TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    );
+  }
+
+  return (
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>{indicator}</TooltipTrigger>
+        <TooltipContent>
+          {activeDeployment.status === 'building'
+            ? 'Deployment is building...'
+            : activeDeployment.status === 'pending'
+              ? 'Deployment is queued'
+              : activeDeployment.status === 'failed'
+                ? 'Deployment failed'
+                : 'Deployed'}
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+}
+
 /**
  * ProjectBranchBar - Shows branch info for all repos in a project
  * Inspired by AutoMaker's WorktreePanel
@@ -445,6 +574,9 @@ export function ProjectBranchBar({ projectId, className }: ProjectBranchBarProps
         {repos.length > 0 && (
           <DeployButton projectId={projectId} repos={repos} />
         )}
+
+        {/* Deployment Status Indicator */}
+        <DeploymentStatusIndicator projectId={projectId} />
 
         {/* Dev Server Status Indicator */}
         <TooltipProvider>
