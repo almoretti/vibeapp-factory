@@ -366,6 +366,32 @@ export function GeneralSettings() {
             </div>
           )}
 
+          {draft?.editor.editor_type === EditorType.CODE_SERVER && (
+            <div className="space-y-2">
+              <Label htmlFor="code-server-url">
+                {t('settings.general.editor.codeServerUrl.label')}
+              </Label>
+              <Input
+                id="code-server-url"
+                placeholder={t(
+                  'settings.general.editor.codeServerUrl.placeholder'
+                )}
+                value={draft?.editor.code_server_url || ''}
+                onChange={(e) =>
+                  updateDraft({
+                    editor: {
+                      ...draft!.editor,
+                      code_server_url: e.target.value || null,
+                    },
+                  })
+                }
+              />
+              <p className="text-sm text-muted-foreground">
+                {t('settings.general.editor.codeServerUrl.helper')}
+              </p>
+            </div>
+          )}
+
           {(draft?.editor.editor_type === EditorType.VS_CODE ||
             draft?.editor.editor_type === EditorType.VS_CODE_INSIDERS ||
             draft?.editor.editor_type === EditorType.CURSOR ||

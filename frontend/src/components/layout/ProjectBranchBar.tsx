@@ -119,6 +119,9 @@ function RepoBranchItem({ repo }: RepoBranchItemProps) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['repo-git-status', repo.id] });
     },
+    onError: (error) => {
+      alert(t('tasks:git.push.error', `Push failed: ${error instanceof Error ? error.message : 'Unknown error'}`));
+    },
   });
 
   // Pull mutation
@@ -127,6 +130,9 @@ function RepoBranchItem({ repo }: RepoBranchItemProps) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['repo-git-status', repo.id] });
       queryClient.invalidateQueries({ queryKey: ['repo-branches', repo.id] });
+    },
+    onError: (error) => {
+      alert(t('tasks:git.pull.error', `Pull failed: ${error instanceof Error ? error.message : 'Unknown error'}`));
     },
   });
 
@@ -283,37 +289,67 @@ function RepoBranchItem({ repo }: RepoBranchItemProps) {
                 </Tooltip>
               </TooltipProvider>
             )}
-            {gitStatus.has_remote && gitStatus.ahead > 0 && (
+            {gitStatus.has_remote && (
               <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <button
                       onClick={() => pushMutation.mutate()}
-                      disabled={pushMutation.isPending}
-                      className="flex items-center gap-0.5 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-100 dark:hover:bg-emerald-900/30 px-1 py-0.5 rounded transition-colors"
+                      disabled={pushMutation.isPending || gitStatus.ahead === 0}
+                      className={cn(
+                        'flex items-center gap-0.5 px-1 py-0.5 rounded transition-colors',
+                        gitStatus.ahead > 0
+                          ? 'text-emerald-600 hover:text-emerald-700 hover:bg-emerald-100 dark:hover:bg-emerald-900/30'
+                          : 'text-muted-foreground/50 cursor-not-allowed'
+                      )}
                     >
-                      <ArrowUp className="h-3 w-3" />
-                      {gitStatus.ahead}
+                      {pushMutation.isPending ? (
+                        <RefreshCw className="h-3 w-3 animate-spin" />
+                      ) : (
+                        <ArrowUp className="h-3 w-3" />
+                      )}
+                      {gitStatus.ahead > 0 && <span>{gitStatus.ahead}</span>}
                     </button>
                   </TooltipTrigger>
-                  <TooltipContent>Push {gitStatus.ahead} commit{gitStatus.ahead > 1 ? 's' : ''}</TooltipContent>
+                  <TooltipContent>
+                    {pushMutation.isPending
+                      ? 'Pushing...'
+                      : gitStatus.ahead > 0
+                        ? `Push ${gitStatus.ahead} commit${gitStatus.ahead > 1 ? 's' : ''}`
+                        : 'Nothing to push'}
+                  </TooltipContent>
                 </Tooltip>
               </TooltipProvider>
             )}
-            {gitStatus.has_remote && gitStatus.behind > 0 && (
+            {gitStatus.has_remote && (
               <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <button
                       onClick={() => pullMutation.mutate()}
-                      disabled={pullMutation.isPending}
-                      className="flex items-center gap-0.5 text-amber-600 hover:text-amber-700 hover:bg-amber-100 dark:hover:bg-amber-900/30 px-1 py-0.5 rounded transition-colors"
+                      disabled={pullMutation.isPending || gitStatus.behind === 0}
+                      className={cn(
+                        'flex items-center gap-0.5 px-1 py-0.5 rounded transition-colors',
+                        gitStatus.behind > 0
+                          ? 'text-amber-600 hover:text-amber-700 hover:bg-amber-100 dark:hover:bg-amber-900/30'
+                          : 'text-muted-foreground/50 cursor-not-allowed'
+                      )}
                     >
-                      <ArrowDown className="h-3 w-3" />
-                      {gitStatus.behind}
+                      {pullMutation.isPending ? (
+                        <RefreshCw className="h-3 w-3 animate-spin" />
+                      ) : (
+                        <ArrowDown className="h-3 w-3" />
+                      )}
+                      {gitStatus.behind > 0 && <span>{gitStatus.behind}</span>}
                     </button>
                   </TooltipTrigger>
-                  <TooltipContent>Pull {gitStatus.behind} commit{gitStatus.behind > 1 ? 's' : ''}</TooltipContent>
+                  <TooltipContent>
+                    {pullMutation.isPending
+                      ? 'Pulling...'
+                      : gitStatus.behind > 0
+                        ? `Pull ${gitStatus.behind} commit${gitStatus.behind > 1 ? 's' : ''}`
+                        : 'Up to date'}
+                  </TooltipContent>
                 </Tooltip>
               </TooltipProvider>
             )}

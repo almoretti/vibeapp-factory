@@ -74,6 +74,11 @@
           "placeholder": "e.g., code, subl, vim",
           "helper": "Enter the command to launch your custom editor. This will be used to open files."
         },
+        "codeServerUrl": {
+          "label": "Code Server URL",
+          "placeholder": "e.g., https://code.moretti.cc",
+          "helper": "The base URL of your code-server instance. Files will be opened in the browser via this URL."
+        },
         "remoteSsh": {
           "host": {
             "label": "Remote SSH Host (Optional)",
